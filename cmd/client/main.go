@@ -13,7 +13,7 @@ import (
 func main() {
 	fmt.Println("Starting Peril client...")
 
-	dial, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Println("Error connecting to rabbitMQ", err)
 		return
@@ -21,7 +21,7 @@ func main() {
 
 	defer func(dial *amqp.Connection) {
 		_ = dial.Close()
-	}(dial)
+	}(connection)
 
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
@@ -31,13 +31,25 @@ func main() {
 
 	gameState := gamelogic.NewGameState(username)
 
-	err = pubsub.SubscribeJSON(dial, routing.ExchangePerilDirect, routing.PauseKey+"."+username, routing.PauseKey, pubsub.Transient, handlerPause(gameState))
+	channel, err := connection.Channel()
+
+	if err != nil {
+		log.Println("Error getting the connection channel", err)
+	}
+
+	err = pubsub.SubscribeJSON(connection, routing.ExchangePerilDirect, routing.PauseKey+"."+username, routing.PauseKey, pubsub.Transient, handlerPause(gameState, channel))
 	if err != nil {
 		log.Println("Error subscribing to pause queue for user "+username, err)
 		return
 	}
 
-	err = pubsub.SubscribeJSON(dial, routing.ExchangePerilTopic, routing.ArmyMovesPrefix+"."+username, routing.ArmyMovesPrefix+".*", pubsub.Transient, handlerMove(gameState))
+	err = pubsub.SubscribeJSON(connection, routing.ExchangePerilTopic, routing.ArmyMovesPrefix+"."+username, routing.ArmyMovesPrefix+".*", pubsub.Transient, handlerMove(gameState, channel))
+	if err != nil {
+		log.Println("Error subscribing to the move queue for user "+username, err)
+		return
+	}
+
+	err = pubsub.SubscribeJSON(connection, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix, routing.WarRecognitionsPrefix+".*", pubsub.Durable, handlerWar(gameState, channel))
 	if err != nil {
 		log.Println("Error subscribing to the move queue for user "+username, err)
 		return
@@ -68,7 +80,7 @@ func main() {
 
 			fmt.Println("Successfully moved")
 
-			channel, err := dial.Channel()
+			channel, err := connection.Channel()
 			if err != nil {
 				log.Println("Error getting channel to publish the move", err)
 				continue

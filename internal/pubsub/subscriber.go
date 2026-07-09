@@ -22,16 +22,16 @@ func SubscribeJSON[T any](
 		return err
 	}
 
-	defer func(channel *amqp.Channel) {
-		_ = channel.Close()
-	}(channel)
-
 	subscriberChannel, err := channel.Consume(queueName, "", false, false, false, false, nil)
 	if err != nil {
 		return err
 	}
 
 	go func(ch <-chan amqp.Delivery) {
+		defer func(channel *amqp.Channel) {
+			_ = channel.Close()
+		}(channel)
+
 		for delivery := range ch {
 			var msg T
 			err := json.Unmarshal(delivery.Body, &msg)
