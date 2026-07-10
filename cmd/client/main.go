@@ -98,6 +98,7 @@ func main() {
 		} else if firstWord == "spam" {
 			if len(inputs) < 2 {
 				fmt.Println("usage: spam <number>")
+				continue
 			}
 
 			str := inputs[1]
@@ -121,7 +122,7 @@ func main() {
 				}
 			}
 
-			fmt.Println("Spawned")
+			fmt.Printf("Published %d spam logs\n", number)
 
 		} else if firstWord == "quit" {
 			gamelogic.PrintQuit()
