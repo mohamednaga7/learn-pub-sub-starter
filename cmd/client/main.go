@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -80,12 +82,6 @@ func main() {
 
 			fmt.Println("Successfully moved")
 
-			channel, err := connection.Channel()
-			if err != nil {
-				log.Println("Error getting channel to publish the move", err)
-				continue
-			}
-
 			err = pubsub.PublishJSON(channel, routing.ExchangePerilTopic, routing.ArmyMovesPrefix+"."+username, move)
 			if err != nil {
 				log.Println("Error publishing the move to the queue", err)
@@ -100,7 +96,32 @@ func main() {
 			gamelogic.PrintClientHelp()
 
 		} else if firstWord == "spam" {
-			fmt.Println("Spamming not allowed yet!")
+			if len(inputs) < 2 {
+				fmt.Println("usage: spam <number>")
+			}
+
+			str := inputs[1]
+
+			number, err := strconv.Atoi(str)
+			if err != nil {
+				fmt.Println("incorrect number entered")
+				continue
+			}
+
+			for i := 0; i < number; i++ {
+				maliciousLog := gamelogic.GetMaliciousLog()
+				err := pubsub.PublishGob(channel, routing.ExchangePerilTopic, routing.GameLogSlug+"."+username, routing.GameLog{
+					Username:    username,
+					CurrentTime: time.Now(),
+					Message:     maliciousLog,
+				})
+				if err != nil {
+					log.Println("Error publishing the move to the queue", err)
+					continue
+				}
+			}
+
+			fmt.Println("Spawned")
 
 		} else if firstWord == "quit" {
 			gamelogic.PrintQuit()
