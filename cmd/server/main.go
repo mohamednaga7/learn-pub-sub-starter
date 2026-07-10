@@ -7,6 +7,7 @@ import (
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/shared"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -27,14 +28,18 @@ func main() {
 		return
 	}
 
-	closable, _, err := pubsub.DeclareAndBind(dial, routing.ExchangePerilTopic, routing.GameLogSlug, "game_logs.*", pubsub.Durable)
+	err = pubsub.SubscribeGob(
+		dial,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		routing.GameLogSlug+".*",
+		pubsub.Durable,
+		handlerGameLog(),
+	)
 	if err != nil {
+		log.Println("Error subscribing to game logs", err)
 		return
 	}
-
-	defer func(closable *amqp.Channel) {
-		_ = closable.Close()
-	}(closable)
 
 	fmt.Println("Started listening...")
 
@@ -75,4 +80,17 @@ func main() {
 	}
 
 	fmt.Println("Server is shutting down...")
+}
+
+func handlerGameLog() func(routing.GameLog) shared.AckType {
+	return func(gl routing.GameLog) shared.AckType {
+		defer fmt.Print("> ")
+
+		err := gamelogic.WriteLog(gl)
+		if err != nil {
+			log.Println("Error writing game log", err)
+			return shared.NackRequeue
+		}
+		return shared.Ack
+	}
 }
